@@ -8,9 +8,9 @@ Chrome **cannot** one-click install from a website the way an Android APK can. G
 2. Turn on **Developer mode** (top right)
 3. Click **Load unpacked**
 4. Select the folder  
-   `WEMA Bank Hackathon/nairadirect-extension`  
+   `bridge-extension`  
    (the folder that contains `manifest.json`)
-5. Click **Reload** on Bridge if it was already installed (version `0.1.5`)
+5. Click **Reload** on Bridge if it was already installed (version `0.1.8`)
 6. Pin Bridge
 7. Click the extension icon → **Open demo checkout**  
    Pay in Naira → confirm payment. The same page should return showing **Payment successful**.
@@ -20,7 +20,7 @@ If you open a local HTML file (`file://`) and the overlay does not appear, on `c
 ## Folder layout
 
 ```
-nairadirect-extension/
+bridge-extension/
   manifest.json
   pages/     HTML only (popup, checkout, demo store, overlay)
   css/       styles only (tokens, popup, checkout, overlay, paid)
@@ -40,8 +40,8 @@ nairadirect-extension/
 
 ## Make it downloadable for anyone (today)
 
-1. Zip `nairadirect-extension` (manifest.json at the **inside** of the zip folder).
-2. Put the zip next to `nairadirect-web/index.html`.
+1. Zip `bridge-extension` (manifest.json at the **inside** of the zip folder).
+2. Put the zip next to `bridge-web/index.html`.
 3. Deploy `nairadirect-web` to Vercel / Netlify / GitHub Pages.
 4. Share that URL. People download the zip, unzip, Load unpacked.
 
