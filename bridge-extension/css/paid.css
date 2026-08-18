@@ -1,0 +1,21 @@
+#nairadirect-paid-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2147483647;
+  background: #4a2e22;
+  color: #ffffff;
+  border-bottom: 3px solid #6e1f33;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+body.nairadirect-paid {
+  padding-top: 56px;
+}

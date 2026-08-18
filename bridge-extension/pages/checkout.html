@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pay in Naira · Bridge</title>
+    <link rel="stylesheet" href="../css/checkout.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M8 16.6Q16 8.2 24 16.6Z" fill="#6E1F33"/><path d="M6.5 16.8C6.5 16.8 11.2 7.6 16 7.6S25.5 16.8 25.5 16.8" stroke="#F6F0E4" stroke-width="2.6" stroke-linecap="round"/><rect x="6" y="15.7" width="20" height="2.7" rx="0.6" fill="#B08D57"/><rect x="8.3" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4"/><rect x="20.4" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4"/></svg></span>
+        <div>
+          <p class="eyebrow">Bridge · Wema FX checkout</p>
+          <h1>Pay in Naira. We settle the merchant.</h1>
+        </div>
+      </header>
+
+      <section class="panel" id="quote-panel">
+        <p class="muted">Loading quote…</p>
+      </section>
+
+      <section class="panel" id="pay-panel" hidden>
+        <h2>Pay from your bank</h2>
+        <p class="muted">Remita-style: no Grey account. Transfer to this session NUBAN, or simulate for the demo.</p>
+        <dl>
+          <div><dt>Session</dt><dd id="session-id">—</dd></div>
+          <div><dt>NUBAN</dt><dd>1100162847</dd></div>
+          <div><dt>Bank</dt><dd>Wema Bank</dd></div>
+          <div><dt>Amount</dt><dd id="pay-amount">—</dd></div>
+        </dl>
+        <button id="simulate" type="button">I have paid this Naira amount</button>
+      </section>
+
+      <ol class="pipeline" id="pipeline" hidden>
+        <li data-step="quoted">Quote locked</li>
+        <li data-step="awaiting">Awaiting Naira</li>
+        <li data-step="received">Naira received</li>
+        <li data-step="converting">Converting FX</li>
+        <li data-step="paying">Paying merchant</li>
+        <li data-step="settled">Settled</li>
+      </ol>
+
+      <p class="fineprint">
+        You never receive a virtual dollar card. Settlement uses Wema’s pooled FX rail.
+        This prototype confirms the pipeline; live Stripe completion is not claimed.
+      </p>
+    </main>
+    <script src="../js/checkout.js"></script>
+  </body>
+</html>

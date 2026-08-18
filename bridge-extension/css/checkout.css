@@ -1,0 +1,169 @@
+@import url("./tokens.css");
+
+body {
+  min-height: 100vh;
+  background: var(--cream);
+  color: var(--brown);
+}
+
+main {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+}
+
+header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--brown);
+  color: var(--cream);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.mark svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--burgundy);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  color: var(--brown);
+}
+
+h2 {
+  font-size: 16px;
+}
+
+.panel {
+  background: var(--white);
+  border: 1px solid var(--brown-line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: var(--brown-muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.totals {
+  display: grid;
+  gap: 8px;
+}
+
+.totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.totals strong {
+  color: var(--burgundy);
+  font-size: 20px;
+}
+
+dl {
+  margin: 0 0 16px;
+}
+
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--brown-line);
+  font-size: 14px;
+}
+
+dt {
+  color: var(--brown-muted);
+}
+
+dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--brown);
+}
+
+button {
+  width: 100%;
+  cursor: pointer;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--brown);
+  color: var(--white);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  transition: background 180ms ease;
+}
+
+button:hover {
+  background: var(--brown-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pipeline {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.pipeline li {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--brown-line);
+  color: var(--brown-muted);
+  font-size: 14px;
+  background: var(--white);
+}
+
+.pipeline li.active {
+  border-color: var(--brown);
+  color: var(--brown);
+  background: var(--cream);
+}
+
+.pipeline li.done {
+  border-color: var(--brown);
+  color: var(--burgundy);
+  background: var(--white);
+}
+
+.fineprint {
+  color: var(--brown-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

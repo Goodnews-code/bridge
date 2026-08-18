@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Bridge",
+  "version": "0.1.8",
+  "description": "Pay foreign checkouts in Naira. No Grey. No virtual dollar card.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Bridge — pay in Naira",
+    "default_popup": "pages/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*", "file://*/*"],
+      "js": ["js/paid.js", "js/overlay-ui.js", "js/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://open.er-api.com/*"],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pages/checkout.html",
+        "pages/overlay.html",
+        "css/overlay.css",
+        "css/paid.css",
+        "css/tokens.css",
+        "icons/*"
+      ],
+      "matches": ["http://*/*", "https://*/*", "file://*/*"]
+    }
+  ]
+}

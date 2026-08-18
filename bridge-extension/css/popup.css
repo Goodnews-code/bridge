@@ -1,0 +1,96 @@
+@import url("./tokens.css");
+
+body {
+  width: 320px;
+  padding: 16px;
+  background: var(--cream);
+  color: var(--brown);
+}
+
+header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--brown);
+  color: var(--cream);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.mark svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 16px;
+  color: var(--brown);
+}
+
+header p,
+.hint {
+  color: var(--brown-muted);
+  font-size: 12px;
+}
+
+h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brown-muted);
+  margin-bottom: 8px;
+}
+
+.toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+ol {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--brown);
+}
+
+button {
+  width: 100%;
+  cursor: pointer;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: var(--brown);
+  color: var(--white);
+  font-weight: 600;
+  font-size: 13px;
+  font-family: inherit;
+  transition: background 180ms ease;
+}
+
+button:hover {
+  background: var(--brown-hover);
+}
+
+.hint {
+  margin-top: 12px;
+  line-height: 1.4;
+}

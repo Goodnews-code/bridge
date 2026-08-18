@@ -1,0 +1,23 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+  --brown: #4a2e22;
+  --brown-hover: #5c3a2c;
+  --burgundy: #6e1f33;
+  --brass: #b08d57;
+  --brown-muted: #7a5643;
+  --brown-line: #d4c4b0;
+  --cream: #f6f0e4;
+  --white: #ffffff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}

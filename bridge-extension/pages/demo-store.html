@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checkout · Northwind SaaS</title>
+    <link rel="stylesheet" href="../css/demo-store.css" />
+    <link rel="stylesheet" href="../css/overlay.css" />
+    <link rel="stylesheet" href="../css/paid.css" />
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <span class="badge">DEMO MERCHANT</span>
+        <h1>Northwind Pro — annual</h1>
+        <p>This is a fake foreign checkout so you can test Bridge without Stripe. Amount is <strong>USD 12.99</strong>.</p>
+        <div class="sum"><span>Subtotal</span><span>$12.99</span></div>
+        <div class="sum"><span>Tax</span><span>$0.00</span></div>
+        <div class="sum"><span>Total due today</span><strong>$12.99 USD</strong></div>
+      </section>
+      <section class="card" id="nd-pay-panel">
+        <h1>Pay with card</h1>
+        <p>Pretend Stripe / PayPal. If Bridge is installed, the overlay should offer Pay in Naira.</p>
+        <form id="card-form">
+          <label>Card number<input value="4242 4242 4242 4242" readonly /></label>
+          <label>Expiry<input value="12 / 28" readonly /></label>
+          <label>CVC<input value="123" readonly /></label>
+          <button type="submit">Pay $12.99</button>
+        </form>
+      </section>
+      <section class="card paid-card" id="nd-paid-panel" hidden>
+        <span class="badge paid-badge">PAYMENT MADE</span>
+        <h1>Payment successful</h1>
+        <p>Bridge paid this merchant in FX. You do not need a virtual dollar card.</p>
+        <div class="sum"><span>Status</span><strong>Paid</strong></div>
+        <div class="sum"><span>You paid</span><strong id="nd-paid-naira">—</strong></div>
+        <div class="sum"><span>Reference</span><span id="nd-paid-session">—</span></div>
+        <p id="nd-receipt"></p>
+      </section>
+    </main>
+    <script src="../js/paid.js"></script>
+    <script src="../js/overlay-ui.js"></script>
+    <script src="../js/demo-store.js"></script>
+    <script src="../js/demo-bridge.js"></script>
+  </body>
+</html>
