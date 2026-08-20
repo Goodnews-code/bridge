@@ -1,7 +1,7 @@
 import type { Currency } from "./money.js";
 
 /**
- * The Paron transaction state machine (see services/transactions/stateMachine.ts).
+ * The Bridge transaction state machine (see services/transactions/stateMachine.ts).
  *
  * Happy path:
  *   CREATED -> QUOTE_CREATED -> AWAITING_TRANSFER -> TRANSFER_CONFIRMED ->

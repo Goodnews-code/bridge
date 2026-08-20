@@ -10,7 +10,7 @@ import type {
 
 /**
  * Sandbox merchant adapter (spec §10, Option A/C). Simulates presenting the
- * Paron virtual card at a merchant checkout and receiving an authorization.
+ * Bridge virtual card at a merchant checkout and receiving an authorization.
  *
  * When the configured card provider supports a direct spend authorization
  * (our mock does, via `authorizeSpend`), we debit the card so balances stay

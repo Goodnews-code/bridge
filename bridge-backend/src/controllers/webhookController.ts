@@ -5,7 +5,7 @@ import { processCardProviderWebhook } from "../webhooks/cardProviderWebhook.js";
 
 /** Common provider signature header names we accept. */
 const SIGNATURE_HEADERS = [
-  "x-paron-signature",
+  "x-bridge-signature",
   "x-webhook-signature",
   "x-signature",
   "verif-hash",

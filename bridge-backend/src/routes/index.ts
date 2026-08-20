@@ -21,7 +21,7 @@ apiRouter.get("/health", (_req: Request, res: Response) => {
     ok: true,
     data: {
       status: "ok",
-      service: "paron-backend",
+      service: "bridge-backend",
       environment: env.NODE_ENV,
       time: new Date().toISOString(),
     },

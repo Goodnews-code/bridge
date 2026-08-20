@@ -5,7 +5,7 @@ import type { Currency } from "../../types/money.js";
  *
  * SECURITY: this interface deliberately never exposes raw PAN/CVV to the rest
  * of the app. A concrete provider may return a one-time `secureRef` (an opaque
- * token/URL the extension can exchange with the provider directly), but Paron's
+ * token/URL the extension can exchange with the provider directly), but Bridge's
  * backend stores and logs only `cardReference` and non-sensitive metadata.
  */
 

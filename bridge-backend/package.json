@@ -1,5 +1,5 @@
 {
-  "name": "paron-backend",
+  "name": "bridge-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/server.js",
@@ -13,7 +13,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Paron payment-orchestration backend (currency conversion, quotes, transfer verification, virtual card issuing, payment lifecycle).",
+  "description": "Bridge payment-orchestration backend (currency conversion, quotes, transfer verification, virtual card issuing, payment lifecycle).",
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

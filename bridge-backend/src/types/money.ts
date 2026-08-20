@@ -1,5 +1,5 @@
 /**
- * Currency codes Paron understands. NGN is the settlement currency; everything
+ * Currency codes Bridge understands. NGN is the settlement currency; everything
  * else is a "foreign" currency that must be converted to NGN.
  */
 export const SUPPORTED_CURRENCIES = [

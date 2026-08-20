@@ -18,7 +18,7 @@ export interface ConversionInput {
 
 /**
  * CurrencyService (spec §3, §4). Converts a merchant amount into the NGN sum a
- * user must transfer, applying Paron's configurable spread. NGN amounts pass
+ * user must transfer, applying Bridge's configurable spread. NGN amounts pass
  * through with no conversion. The FX rate always comes from the provider; the
  * extension never computes rates.
  */
