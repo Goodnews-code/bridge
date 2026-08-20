@@ -1,74 +1,84 @@
 # Bridge
 
-Pay a foreign (USD / EUR / GBP) checkout in **Naira**. You do not need Grey or a personal virtual dollar card.
+**Pay a foreign checkout in Naira — no Grey, no personal virtual dollar card.**
 
-Chrome cannot install this from a website in one click. Load the unpacked folder from this repo.
+When a Nigerian hits a USD / EUR / GBP checkout, the Chrome extension quotes the bill in ₦, they transfer from a bank they already have, and the backend settles the merchant from a **pooled bank-side rail**. The user never holds a dollar card.
 
-## Install the extension
+Hackathon: **Hackaholics 7.0** (Lagos). Sandbox prototype — mock adapters, no real money. Repo: [github.com/Goodnews-code/bridge](https://github.com/Goodnews-code/bridge)
 
-1. Clone or download this repo  
-   [https://github.com/Goodnews-code/bridge](https://github.com/Goodnews-code/bridge)
-2. Open Chrome and go to `chrome://extensions`
-3. Turn on **Developer mode** (top right)
-4. Click **Load unpacked**
-5. Select the `bridge-extension` folder (the one that contains `manifest.json`)
-6. Pin **Bridge** in the Chrome toolbar
+Product narrative (why Wema, settlement honesty): [Bridge.md](./Bridge.md).
 
-If Chrome already had an older copy, click **Reload** on the Bridge card.
+---
 
-## Try it
+## Packages
 
-1. Click the Bridge icon → **Open demo checkout**  
-   or open `bridge-extension/pages/demo-store.html` in Chrome
-2. On the fake USD checkout, click **Pay in Naira**
-3. Confirm on the Bridge screen. The demo page should return as **Payment successful**
+| Folder | Job | Docs |
+|---|---|---|
+| [`bridge-extension/`](./bridge-extension/) | Detect checkout, overlay, Naira pay UI | [README](./bridge-extension/README.md) |
+| [`bridge-backend/`](./bridge-backend/) | Quotes, NGN collection, mock FX settlement | [README](./bridge-backend/README.md) |
+| [`bridge-ML/`](./bridge-ML/) | Logistic risk scorer (train + TypeScript runtime) | [README](./bridge-ML/README.md) |
+| [`bridge-web/`](./bridge-web/) | Install landing + public demo page | `index.html`, `demo.html` |
 
-If you open a local `file://` page and the overlay does not appear: `chrome://extensions` → Bridge → **Allow access to file URLs**.
+The extension never sees FX keys, card PANs, or webhook secrets.
 
-## Folders
+---
 
-| Folder | What it is |
-|---|---|
-| `bridge-extension/` | Chrome extension — **Load unpacked** this folder |
-| `bridge-backend/` | Express API (quotes, transfers, risk gate via `bridge-ml`) |
-| `bridge-ML/` | Standalone FX risk model (`bridge-risk-logit-sklearn-v1`) |
-| `bridge-web/` | Landing page and public demo checkout |
+## Quick start
+
+Need **Chrome**, **Node.js 20+**, and **npm**. Two processes: API on `:4000`, then the unpacked extension.
+
+```powershell
+cd bridge-backend
+copy .env.example .env
+npm install
+npm run dev
+```
+
+Confirm [http://localhost:4000/health](http://localhost:4000/health) is `ok`. `API_KEY` in `.env` must match `bridge-extension/js/config.js`.
+
+Then in Chrome: `chrome://extensions` → **Developer mode** → **Load unpacked** → select `bridge-extension` (must show version **0.2.5**; **Reload** if an older copy is loaded) → pin Bridge → **Open demo checkout** → Pay in Naira → **I have paid this Naira amount**.
+
+You should return to the demo store with **Payment successful**. For `file://` pages, enable **Allow access to file URLs** on the extension card.
+
+`.env.example` sets `SIMULATE_TRANSFERS=true` so confirm completes offline.
+
+---
 
 ## How the pieces connect
 
 ```
-Extension (overlay / checkout)
-  → POST /api/v1/payment-quotes  (+ deviceId, merchant, sourceUrl)
-    → bridge-backend risk gate
-      → bridge-ml logistic scorer (allow | review | deny)
-    → NGN quote (+ risk payload) OR 403 RISK_BLOCKED
-  → overlay shows score / model; deny shows blocked UI
+Merchant / demo page
+  → content script (detect total + pay button)
+  → service worker  POST /api/v1/payment-quotes
+  → overlay “Pay ₦X?”
+  → service worker  POST /api/v1/transactions
+  → checkout.html?txn=…  (funding instructions)
+  → POST /transactions/:id/confirm  (sandbox fires a signed webhook)
+  → poll GET /transactions/:id  until successful
+  → back to merchant + receipt
 ```
 
-Popup status line hits `GET /health`, which reports the loaded ML model id.
+Static demo book: **$20 × ₦1,500 + 2% spread = ₦30,600**. NGN amounts pass through with no spread. Settlement uses a pooled platform card (not a consumer Grey card).
 
-## Permissions
+---
 
-- `storage` — remember on/off and demo sessions
-- `tabs` — return you to the merchant page after pay
-- `http://localhost:4000/*` — Bridge backend (quotes + settlement)
+## Troubleshooting
 
-Bridge does not read card numbers.
+| Symptom | Fix |
+|---|---|
+| Overlay never appears | Reload the extension. `file://` → allow file URLs. Page needs a pay button and a supported-currency total |
+| Popup: backend offline | API not running — `npm run dev` in `bridge-backend`, then open `/health` |
+| Quote 401 | `config.js` key ≠ `.env` `API_KEY`; reload the extension |
+| “No transaction reference” | Reload extension and start again from Pay in Naira |
+| Stuck on Confirming | `SIMULATE_TRANSFERS=true` in `.env`, restart the API |
+| Old overlay | Reload until the card shows **0.2.5** |
 
-## Backend (required for Pay in Naira)
+---
 
-1. In `bridge-backend`:
-   ```powershell
-   copy .env.example .env
-   npm install
-   npm run dev
-   ```
-2. Confirm `http://localhost:4000/health` responds.
-3. Reload the Bridge extension on `chrome://extensions` (version **0.2.3**).
-4. Open demo checkout → Pay in Naira → confirm transfer.
+## Where details live
 
-The extension sends `x-api-key` from `bridge-extension/js/config.js` (must match `API_KEY` in `.env`).
+Do not duplicate these here — open the package README:
 
-### Risk / ML gate
-
-Every quote runs `bridge-risk-logit-v1` (logistic score on amount, velocity, merchant pattern, hour, **new vs returning device**, **mock IP/country risk bucket**). Response includes `risk: { score, decision, reasons, context }`. `deny` returns `403 RISK_BLOCKED` when `RISK_BLOCK_ON_DENY=true`. FX math stays deterministic — ML only gates whether to open a session.
+- Install / zip / detection / permissions → [bridge-extension/README.md](./bridge-extension/README.md)
+- Env vars, API, providers, webhooks, state machine → [bridge-backend/README.md](./bridge-backend/README.md)
+- Train / export the risk model → [bridge-ML/README.md](./bridge-ML/README.md)
