@@ -42,17 +42,26 @@ async function bridgeMountOffer(parent, detection, quote, handlers) {
   wrap.className = "nd-wrap";
   wrap.innerHTML = html;
 
+  const totalNgn = quote.totalNgn != null ? quote.totalNgn : quote.amountToTransferNGN;
+  const feePct =
+    quote.spreadPercent != null
+      ? quote.spreadPercent
+      : Math.round((quote.feeRate || 0) * 1000) / 10;
+  const rate = quote.rate != null ? quote.rate : quote.exchangeRate;
+
   wrap.querySelector("#nd-merchant").textContent = detection.merchant;
   wrap.querySelector("#nd-fx").textContent = bridgeFormatFx(
     detection.amount,
     detection.currency
   );
-  wrap.querySelector("#nd-naira").textContent = bridgeFormatNaira(quote.totalNgn);
-  const feePct =
-    quote.spreadPercent != null
-      ? quote.spreadPercent
-      : Math.round((quote.feeRate || 0) * 1000) / 10;
-  let meta = `Rate ₦${Math.round(quote.rate).toLocaleString("en-NG")} / ${detection.currency} · includes ${feePct}% spread`;
+  wrap.querySelector("#nd-naira").textContent = bridgeFormatNaira(totalNgn);
+
+  // A Naira checkout is settled 1:1 with no FX spread — show a transfer message
+  // rather than a nonsensical "Rate ₦1 / NGN · 0% fee" line.
+  let meta =
+    detection.currency === "NGN"
+      ? "Pay by bank transfer · no exchange fee"
+      : `Rate ₦${Math.round(rate).toLocaleString("en-NG")} / ${detection.currency} · includes ${feePct}% spread`;
   meta += bridgeRiskMeta(quote.risk);
   wrap.querySelector("#nd-meta").textContent = meta;
 

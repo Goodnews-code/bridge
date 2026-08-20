@@ -1,12 +1,66 @@
+// Bridge service worker — the extension's single point of contact with the
+// backend. All backend fetches live here: because the worker holds
+// host_permissions for the API origin, its cross-origin requests bypass CORS
+// (no preflight). Content scripts and extension pages never touch the network
+// or the API key — they talk to this worker via chrome.runtime messages, and
+// chrome.storage.session stays worker-owned.
 importScripts("config.js");
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ enabled: true, sessions: [] });
 });
 
+/**
+ * Call the Bridge backend and normalize the result.
+ *   success → { ok: true,  status, data }
+ *   failure → { ok: false, status, code, message, details }   (HTTP error or network)
+ * Unwraps the backend's { ok, data } / { ok, error } envelope so callers only
+ * deal with data/code.
+ */
+async function api(path, { method = "GET", body, headers: extraHeaders } = {}) {
+  const headers = { "x-api-key": BRIDGE_API_KEY, ...(extraHeaders || {}) };
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(body);
+  }
+
+  let res;
+  try {
+    res = await fetch(`${BRIDGE_API_BASE}${path}`, init);
+  } catch (_error) {
+    return {
+      ok: false,
+      status: 0,
+      code: "NETWORK_ERROR",
+      message: `Cannot reach the Bridge backend at ${BRIDGE_API_BASE}. Is it running?`,
+    };
+  }
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch (_error) {
+    /* some 2xx responses may carry no JSON body */
+  }
+
+  if (res.ok) {
+    return { ok: true, status: res.status, data: payload && "data" in payload ? payload.data : null };
+  }
+
+  const error = (payload && payload.error) || {};
+  return {
+    ok: false,
+    status: res.status,
+    code: error.code || "REQUEST_FAILED",
+    message: error.message || `Request failed (${res.status}).`,
+    details: error.details || null,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_QUOTE") {
-    createBackendQuote(message.payload)
+    getQuote(message.payload)
       .then(sendResponse)
       .catch((error) => sendResponse(toErrorPayload(error)));
     return true;
@@ -22,53 +76,69 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "OPEN_CHECKOUT") {
     const originTabId = sender.tab && sender.tab.id;
     const originUrl = sender.tab && sender.tab.url;
-    if (!originTabId || !originUrl) {
+    if (!originTabId) {
       sendResponse({ ok: false, error: "Missing origin tab" });
       return false;
     }
+    openCheckout(originTabId, originUrl, message.payload)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 
-    const params = new URLSearchParams({
-      amount: String(message.payload.amount),
-      currency: message.payload.currency || "USD",
-      merchant: message.payload.merchant || "Foreign merchant",
-    });
-    if (message.payload.quoteId) params.set("quoteId", message.payload.quoteId);
-
-    chrome.storage.session.set(
-      {
-        [`origin:${originTabId}`]: {
-          originUrl,
-          detection: message.payload,
-        },
-      },
-      () => {
-        chrome.tabs.update(originTabId, {
-          url: chrome.runtime.getURL(`pages/checkout.html?${params.toString()}`),
-        });
-        sendResponse({ ok: true });
+  if (message.type === "GET_TRANSACTION") {
+    const id = message.payload && message.payload.transactionId;
+    if (!id) {
+      sendResponse({ ok: false, error: "Missing transaction id" });
+      return false;
+    }
+    const key = `txn:${id}`;
+    chrome.storage.session.get(key, (data) => {
+      const stored = data[key];
+      if (!stored) {
+        sendResponse({ ok: false, error: "Unknown transaction" });
+        return;
       }
+      sendResponse({ ok: true, ...stored });
+    });
+    return true;
+  }
+
+  if (message.type === "CONFIRM_TRANSFER") {
+    const id = message.payload && message.payload.transactionId;
+    if (!id) {
+      sendResponse({ ok: false, error: "Missing transaction id" });
+      return false;
+    }
+    api(`/api/v1/transactions/${encodeURIComponent(id)}/confirm`, { method: "POST" }).then(
+      (result) =>
+        sendResponse(
+          result.ok
+            ? { ok: true, data: result.data }
+            : { ok: false, error: result.message, code: result.code, details: result.details }
+        )
     );
     return true;
   }
 
-  if (message.type === "CREATE_TRANSACTION") {
-    createBackendTransaction(message.payload)
-      .then(sendResponse)
-      .catch((error) => sendResponse(toErrorPayload(error)));
-    return true;
-  }
-
-  if (message.type === "CONFIRM_PAYMENT") {
-    confirmBackendPayment(message.payload)
-      .then(sendResponse)
-      .catch((error) => sendResponse(toErrorPayload(error)));
-    return true;
-  }
-
-  if (message.type === "GET_PAYMENT_STATUS") {
-    getBackendPaymentStatus(message.payload)
-      .then(sendResponse)
-      .catch((error) => sendResponse(toErrorPayload(error)));
+  if (message.type === "GET_STATUS") {
+    const id = message.payload && message.payload.transactionId;
+    if (!id) {
+      sendResponse({ ok: false, error: "Missing transaction id" });
+      return false;
+    }
+    api(`/api/v1/transactions/${encodeURIComponent(id)}`, { method: "GET" }).then((result) =>
+      sendResponse(
+        result.ok
+          ? {
+              ok: true,
+              simplifiedStatus: result.data.simplifiedStatus,
+              status: result.data.status,
+              transaction: result.data,
+            }
+          : { ok: false, error: result.message, code: result.code, details: result.details }
+      )
+    );
     return true;
   }
 
@@ -115,45 +185,32 @@ function toErrorPayload(error) {
   };
 }
 
-async function checkBackendHealth() {
-  const response = await fetch(`${BRIDGE_API_BASE}/health`);
-  if (!response.ok) {
-    throw Object.assign(new Error(`Health check failed (${response.status})`), {
-      code: "BACKEND_DOWN",
-    });
+/**
+ * GET_QUOTE → POST /payment-quotes. Returns a mapped quote view on success,
+ * or { error, code, details } on failure (including RISK_BLOCKED).
+ */
+async function getQuote({ amount, currency, merchant, sourceUrl } = {}) {
+  const sourceAmount = Number(amount);
+  if (!Number.isFinite(sourceAmount) || sourceAmount <= 0) {
+    return { error: "Invalid amount", code: "INVALID_AMOUNT" };
   }
-  const body = await response.json();
-  return body.data || body;
-}
 
-async function apiRequest(path, options = {}) {
-  const response = await fetch(`${BRIDGE_API_BASE}${path}`, {
-    ...options,
+  const deviceId = await getOrCreateDeviceId();
+  const result = await api("/api/v1/payment-quotes", {
+    method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": BRIDGE_API_KEY,
-      ...(options.headers || {}),
+      "Idempotency-Key": `quote-${sourceAmount}-${currency}-${Date.now()}`,
+    },
+    body: {
+      amount: sourceAmount,
+      currency: (currency || "USD").toUpperCase(),
+      deviceId,
+      ...(merchant ? { merchantName: merchant } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
     },
   });
-
-  let body = null;
-  try {
-    body = await response.json();
-  } catch (_error) {
-    body = null;
-  }
-
-  if (!response.ok || !body || body.ok === false) {
-    const errBody = body && body.error ? body.error : null;
-    const message =
-      (errBody && errBody.message) || `Backend error (${response.status})`;
-    const error = new Error(message);
-    error.code = (errBody && errBody.code) || `HTTP_${response.status}`;
-    error.details = (errBody && errBody.details) || null;
-    throw error;
-  }
-
-  return body.data;
+  if (!result.ok) return { error: result.message, code: result.code, details: result.details };
+  return mapQuote(result.data);
 }
 
 function mapQuote(data) {
@@ -171,36 +228,12 @@ function mapQuote(data) {
     feeRate: spreadPercent / 100,
     spreadPercent,
     totalNgn,
+    amountToTransferNGN: totalNgn,
     rate: sourceAmount > 0 ? totalNgn / sourceAmount : Number(data.exchangeRate),
     exchangeRate: Number(data.exchangeRate),
     expiresAt: data.expiresAt,
     risk: data.risk || null,
   };
-}
-
-async function createBackendQuote({ amount, currency, merchant, sourceUrl }) {
-  const sourceAmount = Number(amount);
-  if (!Number.isFinite(sourceAmount) || sourceAmount <= 0) {
-    throw new Error("Invalid amount");
-  }
-
-  const deviceId = await getOrCreateDeviceId();
-
-  const data = await apiRequest("/api/v1/payment-quotes", {
-    method: "POST",
-    headers: {
-      "Idempotency-Key": `quote-${sourceAmount}-${currency}-${Date.now()}`,
-    },
-    body: JSON.stringify({
-      amount: sourceAmount,
-      currency: (currency || "USD").toUpperCase(),
-      deviceId,
-      ...(merchant ? { merchantName: merchant } : {}),
-      ...(sourceUrl ? { sourceUrl } : {}),
-    }),
-  });
-
-  return mapQuote(data);
 }
 
 function getOrCreateDeviceId() {
@@ -216,34 +249,77 @@ function getOrCreateDeviceId() {
   });
 }
 
-async function createBackendTransaction({ quoteId, merchantName, sourceUrl }) {
-  if (!quoteId) throw new Error("Missing quoteId");
+async function checkBackendHealth() {
+  const response = await fetch(`${BRIDGE_API_BASE}/health`);
+  if (!response.ok) {
+    throw Object.assign(new Error(`Health check failed (${response.status})`), {
+      code: "BACKEND_DOWN",
+    });
+  }
+  const body = await response.json();
+  return body.data || body;
+}
 
-  const data = await apiRequest("/api/v1/transactions", {
+/**
+ * OPEN_CHECKOUT → create a transaction from the live quote, then hand the tab
+ * off to the checkout page. If the quote expired between offer and click
+ * (409 QUOTE_EXPIRED), re-quote once from the detection carried in the payload
+ * and retry. Stores the funding instructions in session storage for the
+ * checkout page to read, and remembers the origin URL for the return trip.
+ */
+async function openCheckout(tabId, originUrl, payload = {}) {
+  const { amount, currency, merchant, quoteId, sourceUrl } = payload;
+  const merchantName = merchant || "Foreign merchant";
+
+  let create = await createTransaction(quoteId, merchantName, sourceUrl);
+
+  if (!create.ok && create.code === "QUOTE_EXPIRED") {
+    const requote = await getQuote({ amount, currency, merchant: merchantName, sourceUrl });
+    if (!requote.error && requote.quoteId) {
+      create = await createTransaction(requote.quoteId, merchantName, sourceUrl);
+    }
+  }
+
+  if (!create.ok) {
+    return { ok: false, error: create.message, code: create.code, details: create.details };
+  }
+
+  const { transaction, fundingInstructions } = create.data;
+
+  await chrome.storage.session.set({
+    [`txn:${transaction.id}`]: {
+      transaction,
+      fundingInstructions,
+      merchant: merchantName,
+      amount: transaction.merchantAmount,
+      currency: transaction.merchantCurrency,
+    },
+    [`origin:${tabId}`]: { originUrl, detection: payload },
+  });
+
+  await chrome.tabs.update(tabId, {
+    url: chrome.runtime.getURL(`pages/checkout.html?txn=${encodeURIComponent(transaction.id)}`),
+  });
+
+  return { ok: true, transactionId: transaction.id };
+}
+
+function createTransaction(quoteId, merchantName, sourceUrl) {
+  if (!quoteId) {
+    return Promise.resolve({ ok: false, code: "NO_QUOTE", message: "Missing quote id." });
+  }
+  return api("/api/v1/transactions", {
     method: "POST",
-    body: JSON.stringify({
+    body: {
       quoteId,
-      merchantName: merchantName || "Foreign merchant",
-      ...(sourceUrl ? { sourceUrl } : {}),
-    }),
-  });
-
-  return {
-    transaction: data.transaction,
-    fundingInstructions: data.fundingInstructions,
-  };
-}
-
-async function confirmBackendPayment({ transactionId }) {
-  if (!transactionId) throw new Error("Missing transactionId");
-  return apiRequest(`/api/v1/transactions/${encodeURIComponent(transactionId)}/confirm`, {
-    method: "POST",
+      merchantName,
+      ...(isHttpUrl(sourceUrl) ? { sourceUrl } : {}),
+    },
   });
 }
 
-async function getBackendPaymentStatus({ transactionId }) {
-  if (!transactionId) throw new Error("Missing transactionId");
-  return apiRequest(`/api/v1/transactions/${encodeURIComponent(transactionId)}`);
+function isHttpUrl(value) {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
 async function completeSettlement(tabId, payload) {
@@ -258,6 +334,10 @@ async function completeSettlement(tabId, payload) {
       sessions: [payload, ...sessions].slice(0, 20),
     });
   });
+
+  if (payload && payload.sessionId) {
+    await chrome.storage.session.remove(`txn:${payload.sessionId}`);
+  }
 
   if (!origin || !origin.originUrl) return;
 

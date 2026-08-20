@@ -167,3 +167,11 @@ button:disabled {
   font-size: 12px;
   line-height: 1.5;
 }
+
+.error {
+  margin: 12px 0 0;
+  color: var(--burgundy);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+}

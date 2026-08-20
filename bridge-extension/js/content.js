@@ -5,8 +5,36 @@
 
   const DISMISS_KEY = "bridge-dismissed";
   const PAID_KEY = "bridge-paid";
-  let offered = false;
-  let observer = null;
+
+  // Amount grammar. One number shape reused by every currency matcher: either a
+  // comma-grouped number ("1,234.56") or a plain one ("5000", "12.99"). The first
+  // branch requires at least one comma group (hence `+`), so a plain 4+ digit
+  // number falls through to the second branch instead of being clipped to 3 digits.
+  const AMOUNT_NUM =
+    "([0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)";
+
+  // Currency symbol/code prefixes, most specific first so "US$", "C$", "A$" win
+  // over a bare "$" (which defaults to USD and is therefore checked last). This is
+  // exactly the backend's supported set (src/types/money.ts) — anything else is
+  // intentionally not matched, so it never reaches the API to be rejected.
+  const PREFIXED = [
+    { currency: "USD", sym: "US\\$|USD" },
+    { currency: "CAD", sym: "CA\\$|C\\$|CAD" },
+    { currency: "AUD", sym: "AU\\$|A\\$|AUD" },
+    { currency: "EUR", sym: "EUR|€" },
+    { currency: "GBP", sym: "GBP|£" },
+    { currency: "JPY", sym: "JPY|¥" },
+    { currency: "NGN", sym: "NGN|₦" },
+    { currency: "USD", sym: "\\$" },
+  ];
+  const SUFFIX_CODES = "USD|EUR|GBP|JPY|CAD|AUD|NGN";
+
+  // Labels that name the amount a shopper actually pays, and labels that name a
+  // partial figure we must never mistake for the total.
+  const TOTAL_RE =
+    /\b(grand\s+total|order\s+total|total\s+due|amount\s+due|amount\s+to\s+pay|you\s+pay|total)\b/i;
+  const NEGATIVE_RE =
+    /\b(sub[\s-]?total|tax|vat|gst|hst|shipping|delivery|discount|you\s+save|savings?)\b/i;
 
   chrome.runtime.sendMessage({ type: "CLAIM_RECEIPT" }, (receipt) => {
     if (receipt) {
@@ -22,67 +50,130 @@
     chrome.storage.local.get({ enabled: true }, ({ enabled }) => {
       if (!enabled) return;
       if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
-      startWatching();
+      startDetection();
     });
   });
 
-  function startWatching() {
-    // Gateways often paint the total after JS loads — retry + observe DOM.
-    const attempts = [400, 1200, 2500, 4500, 7000];
-    attempts.forEach((ms) => window.setTimeout(() => {
-      void tryOffer();
-    }, ms));
+  // Detect the checkout total, tolerating SPA / late-rendering pages. Runs an
+  // initial pass immediately, then watches the DOM and re-checks periodically
+  // (bounded to ~12s). Debounced. At most one quote is in flight at a time; a
+  // failed quote is retried, and detection stops only once the offer is shown.
+  function startDetection() {
+    let finished = false;
+    let scheduled = false;
+    let quoting = false; // a quote request is in flight — don't start another
+    let shown = false; // the offer is on screen — we're done
+    const logged = new Set();
 
-    if (typeof MutationObserver === "function" && document.body) {
-      let scheduled = false;
-      observer = new MutationObserver(() => {
-        if (offered || scheduled) return;
-        scheduled = true;
-        window.setTimeout(() => {
-          scheduled = false;
-          void tryOffer();
-        }, 350);
-      });
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-    }
-  }
+    // Explain, exactly once per reason, why no offer appeared. Kept quiet on
+    // ordinary pages (we only reach here past the payment-context gate), so the
+    // console isn't spammed on every site the user visits.
+    const diag = (reason, ...rest) => {
+      if (logged.has(reason)) return;
+      logged.add(reason);
+      console.warn(`[Bridge] ${reason}`, ...rest);
+    };
 
-  async function tryOffer() {
-    if (offered || document.getElementById("bridge-root")) return;
-    if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
-
-    const detection = detectCheckout();
-    if (!detection) return;
-
-    offered = true;
-    if (observer) {
+    const stop = () => {
+      finished = true;
       observer.disconnect();
-      observer = null;
-    }
+      window.clearTimeout(deadline);
+      window.clearInterval(poll);
+    };
 
-    const quote = await requestQuote(detection);
-    if (!quote || quote.error) {
+    const attempt = async () => {
+      scheduled = false;
+      if (finished || quoting || shown) return;
+
+      let detection;
+      try {
+        detection = detectCheckout(diag);
+      } catch (error) {
+        diag(`Detection threw — ${error && error.message ? error.message : error}`);
+        return;
+      }
+      if (!detection) return; // keep watching; the page may still be rendering
+
+      quoting = true;
+      const quote = await requestQuote(detection);
+      quoting = false;
+      if (finished || shown) return;
+
       if (quote && quote.code === "RISK_BLOCKED") {
+        shown = true;
+        stop();
         await showBlocked(detection, quote);
         return;
       }
-      offered = false;
-      return;
+
+      // A failed quote must NOT kill detection: the backend may not be running
+      // yet, or the page may re-render. Log why, keep watching, and let the next
+      // mutation / poll try again (bounded by the deadline below).
+      if (!quote || quote.error) {
+        diag(
+          `Quote request failed — offer not shown. ${
+            (quote && quote.error) || "No response from the extension service worker."
+          }${quote && quote.code ? ` (${quote.code})` : ""}`
+        );
+        return;
+      }
+
+      shown = true;
+      stop();
+      showOverlay(detection, quote);
+      console.info("[Bridge] Pay-in-Naira offer shown.");
+    };
+
+    const schedule = () => {
+      if (finished || scheduled) return;
+      scheduled = true;
+      window.setTimeout(attempt, 300);
+    };
+
+    const observer = new MutationObserver(schedule);
+    // Bounded lifetime. The observer catches SPA / late renders; the interval
+    // also retries on static pages (e.g. so a backend started moments after the
+    // page loads still gets a chance without a manual reload).
+    const deadline = window.setTimeout(stop, 12000);
+    const poll = window.setInterval(schedule, 2000);
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     }
-    showOverlay(detection, quote);
+    schedule();
   }
 
-  function detectCheckout() {
-    const text = (document.body && document.body.innerText ? document.body.innerText : "").slice(
-      0,
-      40000
-    );
-    const title = document.title || "";
+  // Only offer on a genuine payment/checkout page AND only when a pay button is
+  // present — never from a stray price on an arbitrary page. The amount we surface
+  // is the order TOTAL, not the first figure we happen to find.
+  function detectCheckout(diag) {
+    if (!isPaymentContext()) return null; // ordinary page — stay silent
+
+    if (!findPayButton()) {
+      if (diag) diag("Looks like a payment page, but no pay / checkout button was found — not offering.");
+      return null;
+    }
+
+    const parsed = findTotalAmount();
+    if (!parsed || !(parsed.amount > 0)) {
+      if (diag) diag("Pay button present, but no total in a supported currency was found — not offering.");
+      return null;
+    }
+
+    return {
+      amount: parsed.amount,
+      currency: parsed.currency,
+      merchant: inferMerchant(document.title || ""),
+    };
+  }
+
+  // A page is a payment context if it is a known gateway host, its path looks like
+  // a checkout, or its title / visible text carries strong checkout wording.
+  function isPaymentContext() {
     const href = location.href.toLowerCase();
+    const path = location.pathname.toLowerCase();
+    const title = document.title || "";
+    const text = (document.body && document.body.innerText ? document.body.innerText : "").slice(0, 4000);
 
     const hostHints = [
       "checkout.stripe.com",
@@ -99,95 +190,132 @@
       "paystack.com",
       "checkout.paystack.com",
     ];
+    if (hostHints.some((host) => href.includes(host))) return true;
+
+    if (/checkout|payment|billing|subscribe/.test(path)) return true;
+
     const pageHints =
-      /checkout|subscribe|subscription|payment|billing|pay now|add your card|order summary|complete order|secure checkout|total due|amount due/i;
-    const knownHost = hostHints.some((host) => href.includes(host));
-    const isPaymentContext =
-      knownHost || pageHints.test(title) || pageHints.test(text.slice(0, 6000));
-
-    const parsed =
-      parseAmount(text) ||
-      parseAmount(title) ||
-      parseAmountFromDom();
-
-    if (!parsed) return null;
-    if (parsed.currency === "NGN") return null;
-    if (!isPaymentContext && parsed.amount < 1) return null;
-
-    if (!isPaymentContext) {
-      const payButton = findPayButton();
-      if (!payButton) return null;
-    }
-
-    return {
-      amount: parsed.amount,
-      currency: parsed.currency,
-      merchant: inferMerchant(title),
-    };
+      /checkout|subscribe|payment|billing|pay now|order summary|order total|place order|complete (your )?(order|purchase)/i;
+    return pageHints.test(title) || pageHints.test(text);
   }
 
+  // The total the shopper pays. Prefer an amount whose surrounding text names it as
+  // the total; fall back to the largest currency amount on the page (on a checkout
+  // the grand total is virtually always the largest money figure). Heuristic, but
+  // only ever runs once the page is confirmed a checkout with a pay button.
+  function findTotalAmount() {
+    return findLabelledTotal() || findLargestAmount();
+  }
+
+  function findLabelledTotal() {
+    if (!document.body || typeof document.createTreeWalker !== "function") return null;
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let node;
+    let scanned = 0;
+
+    while ((node = walker.nextNode()) && scanned < 5000) {
+      scanned++;
+      const label = node.nodeValue || "";
+      if (!TOTAL_RE.test(label) || NEGATIVE_RE.test(label)) continue;
+
+      // Amount in the same text node, else the parent element, else the next
+      // sibling element (labels and amounts often sit in adjacent cells / spans).
+      let parsed = parseAmount(label);
+      if (!parsed) {
+        const el = node.parentElement;
+        if (el) {
+          parsed = parseAmount(el.textContent || "");
+          if (!parsed && el.nextElementSibling) {
+            parsed = parseAmount(el.nextElementSibling.textContent || "");
+          }
+        }
+      }
+      if (parsed) hits.push(parsed);
+    }
+
+    if (!hits.length) return null;
+    return hits.reduce((best, current) => (current.amount > best.amount ? current : best));
+  }
+
+  function findLargestAmount() {
+    const text = (document.body && document.body.innerText ? document.body.innerText : "").slice(0, 20000);
+    const all = parseAllAmounts(text);
+    if (!all.length) return null;
+    return all.reduce((best, current) => (current.amount > best.amount ? current : best));
+  }
+
+  // First amount + currency in a string (specific symbols before bare "$").
   function parseAmount(source) {
-    if (!source) return null;
-
-    // Prefer totals near "Total" / "Pay" labels (Stripe Checkout style).
-    const labeled = source.match(
-      /(?:total|amount due|pay|due today|order total)\s*[:\-]?\s*(?:USD|US\$|\$)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (labeled) return { amount: toNumber(labeled[1]), currency: "USD" };
-
-    const labeledEur = source.match(
-      /(?:total|amount due|pay|due today)\s*[:\-]?\s*(?:EUR|€)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (labeledEur) return { amount: toNumber(labeledEur[1]), currency: "EUR" };
-
-    const labeledGbp = source.match(
-      /(?:total|amount due|pay|due today)\s*[:\-]?\s*(?:GBP|£)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (labeledGbp) return { amount: toNumber(labeledGbp[1]), currency: "GBP" };
-
-    const usd = source.match(
-      /(?:USD|US\$|\$)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (usd) return { amount: toNumber(usd[1]), currency: "USD" };
-
-    const eur = source.match(
-      /(?:EUR|€)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (eur) return { amount: toNumber(eur[1]), currency: "EUR" };
-
-    const gbp = source.match(
-      /(?:GBP|£)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i
-    );
-    if (gbp) return { amount: toNumber(gbp[1]), currency: "GBP" };
-
-    const generic = source.match(
-      /([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(USD|EUR|GBP)/i
-    );
-    if (generic) return { amount: toNumber(generic[1]), currency: generic[2].toUpperCase() };
-
+    for (const { currency, sym } of PREFIXED) {
+      const match = source.match(new RegExp(`(?:${sym})\\s*${AMOUNT_NUM}`, "i"));
+      if (match) return { amount: toNumber(match[1]), currency };
+    }
+    const suffixed = source.match(new RegExp(`${AMOUNT_NUM}\\s*(${SUFFIX_CODES})`, "i"));
+    if (suffixed) return { amount: toNumber(suffixed[1]), currency: suffixed[2].toUpperCase() };
     return null;
   }
 
-  function parseAmountFromDom() {
-    const nodes = document.querySelectorAll(
-      "[data-testid*='total'], [class*='Total'], [class*='total'], [class*='Amount'], [class*='amount']"
-    );
-    for (const node of nodes) {
-      const parsed = parseAmount(node.textContent || "");
-      if (parsed) return parsed;
+  // Every amount + currency in a string. Used to pick the largest as the total.
+  function parseAllAmounts(source) {
+    const results = [];
+
+    const prefixAlt = PREFIXED.map((p) => p.sym).join("|");
+    const prefixRe = new RegExp(`(${prefixAlt})\\s*${AMOUNT_NUM}`, "gi");
+    let m;
+    while ((m = prefixRe.exec(source))) {
+      results.push({ amount: toNumber(m[2]), currency: markerToCurrency(m[1]) });
     }
-    return null;
+
+    const suffixRe = new RegExp(`${AMOUNT_NUM}\\s*(${SUFFIX_CODES})\\b`, "gi");
+    while ((m = suffixRe.exec(source))) {
+      results.push({ amount: toNumber(m[1]), currency: m[2].toUpperCase() });
+    }
+
+    return results.filter((r) => Number.isFinite(r.amount) && r.amount > 0);
+  }
+
+  function markerToCurrency(marker) {
+    const m = marker.toUpperCase();
+    if (m === "US$" || m === "USD" || m === "$") return "USD";
+    if (m === "CA$" || m === "C$" || m === "CAD") return "CAD";
+    if (m === "AU$" || m === "A$" || m === "AUD") return "AUD";
+    if (m === "EUR" || m === "€") return "EUR";
+    if (m === "GBP" || m === "£") return "GBP";
+    if (m === "JPY" || m === "¥") return "JPY";
+    if (m === "NGN" || m === "₦") return "NGN";
+    return "USD";
   }
 
   function toNumber(value) {
     return Number(String(value).replace(/,/g, ""));
   }
 
+  // A genuine pay / checkout control must exist — this is what separates a real
+  // checkout from a page that merely quotes a price. Real buttons phrase the
+  // action many ways and often carry the label in aria-label / title / value
+  // rather than text, so we check those too. Word-boundaried so we never match
+  // "pay" inside an unrelated word.
   function findPayButton() {
-    const nodes = Array.from(document.querySelectorAll("button, a, input[type='submit']"));
-    return nodes.find((node) =>
-      /pay|subscribe|checkout|complete order|buy now/i.test(node.textContent || node.value || "")
+    const nodes = Array.from(
+      document.querySelectorAll(
+        "button, a, input[type='submit'], input[type='button'], [role='button']"
+      )
     );
+    const re =
+      /\b(pay|pay\s?now|pay\s+with|place\s+(the\s+)?order|complete\s+(order|purchase|payment|checkout)|buy(\s+now)?|order\s+now|subscribe|check\s?out|proceed\s+to\s+(pay|payment|checkout)|continue\s+to\s+(pay|payment)|confirm(\s+and\s+pay)?|make\s+payment|submit\s+payment)\b/i;
+    return nodes.find((node) => {
+      const attr = (name) => (node.getAttribute ? node.getAttribute(name) || "" : "");
+      const label = [
+        node.textContent || "",
+        node.value || "",
+        attr("aria-label"),
+        attr("title"),
+        attr("name"),
+      ].join(" ");
+      return re.test(label);
+    });
   }
 
   function inferMerchant(title) {
@@ -249,10 +377,7 @@
       onYes: () => {
         chrome.runtime.sendMessage({
           type: "OPEN_CHECKOUT",
-          payload: {
-            ...detection,
-            quoteId: quote.quoteId,
-          },
+          payload: { ...detection, quoteId: quote.quoteId, sourceUrl: location.href },
         });
         dismiss();
       },

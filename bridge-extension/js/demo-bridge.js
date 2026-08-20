@@ -32,14 +32,20 @@
                 if (offer) offer.remove();
               },
             });
+            return;
           }
+          console.warn(
+            `[Bridge] Demo checkout couldn't load a quote, so no offer is shown. ${
+              (quote && quote.error) || "No response from the extension service worker."
+            }${quote && quote.code ? ` (${quote.code})` : ""} — is the backend running at the API base in js/config.js?`
+          );
           return;
         }
         await bridgeMountOffer(document.body, detection, quote, {
           onYes: () => {
             chrome.runtime.sendMessage({
               type: "OPEN_CHECKOUT",
-              payload: { ...detection, quoteId: quote.quoteId },
+              payload: { ...detection, quoteId: quote.quoteId, sourceUrl: location.href },
             });
           },
           onNo: () => {

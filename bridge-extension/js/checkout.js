@@ -1,203 +1,203 @@
+// Bridge checkout page. Reads the transaction id from the URL, pulls the real
+// funding instructions the service worker stored (GET_TRANSACTION), and — once
+// the user says they've paid — records the claim (CONFIRM_TRANSFER) and polls
+// the backend (GET_STATUS) until settlement. No FX, no NUBAN, and no timers are
+// hard-coded here: every figure comes from the backend.
 const params = new URLSearchParams(location.search);
-const amount = Number(params.get("amount") || "12.99");
-const currency = (params.get("currency") || "USD").toUpperCase();
-const merchant = params.get("merchant") || "Foreign merchant";
-let quoteId = params.get("quoteId") || "";
+const txnId = params.get("txn");
 
 const quotePanel = document.getElementById("quote-panel");
 const payPanel = document.getElementById("pay-panel");
 const pipeline = document.getElementById("pipeline");
 const sessionIdEl = document.getElementById("session-id");
 const payAmountEl = document.getElementById("pay-amount");
-const nairaEl = document.getElementById("pay-nuban");
-const bankEl = document.getElementById("pay-bank");
-const accountNameEl = document.getElementById("pay-account-name");
-const referenceEl = document.getElementById("pay-reference");
-const simulateBtn = document.getElementById("simulate");
+const accountNameEl = document.getElementById("account-name");
+const accountNumberEl = document.getElementById("account-number");
+const bankEl = document.getElementById("bank");
+const referenceEl = document.getElementById("reference");
+const errorEl = document.getElementById("checkout-error");
+const payBtn = document.getElementById("simulate");
 
-let quote = null;
-let transaction = null;
-let funding = null;
+const POLL_INTERVAL_MS = 1500;
+const POLL_TIMEOUT_MS = 60000;
 
-boot();
+let state = null; // { transaction, fundingInstructions, merchant, amount, currency }
+let polling = false;
 
-async function boot() {
-  try {
-    if (!quoteId) {
-      quote = await send("GET_QUOTE", {
-        amount,
-        currency,
-        merchant,
-        sourceUrl: location.href,
-      });
-      if (quote.error) throw Object.assign(new Error(quote.error), quote);
-      quoteId = quote.quoteId;
-    }
+init();
 
-    try {
-      await openTransaction(quoteId);
-    } catch (error) {
-      // Locked overlay quote may have expired — mint a fresh one.
-      quote = await send("GET_QUOTE", {
-        amount,
-        currency,
-        merchant,
-        sourceUrl: location.href,
-      });
-      if (quote.error) throw Object.assign(new Error(quote.error), quote);
-      quoteId = quote.quoteId;
-      await openTransaction(quoteId);
-    }
-
-    renderQuoteFromTransaction();
-    renderFunding();
-    payPanel.hidden = false;
-    pipeline.hidden = false;
-    setStep("quoted", "done");
-    setStep("awaiting", "active");
-  } catch (error) {
-    if (error.code === "RISK_BLOCKED") {
-      const reasons =
-        error.details && Array.isArray(error.details.reasons)
-          ? error.details.reasons.join(" · ")
-          : "";
-      quotePanel.innerHTML = `<p class="muted">Blocked by Bridge ML risk controls. ${escapeHtml(
-        error.message || ""
-      )}${reasons ? ` ${escapeHtml(reasons)}` : ""}</p>`;
-      return;
-    }
-    quotePanel.innerHTML = `<p class="muted">Could not reach Bridge backend. Start it on localhost:4000. ${escapeHtml(error.message || "")}</p>`;
+async function init() {
+  if (!txnId) {
+    quotePanel.innerHTML = `<p class="muted">No transaction reference. Start again from the merchant page.</p>`;
+    return;
   }
+
+  const res = await sendMessage({ type: "GET_TRANSACTION", payload: { transactionId: txnId } });
+  if (!res || !res.ok) {
+    quotePanel.innerHTML = `<p class="muted">Could not load this checkout${
+      res && res.error ? ` — ${escapeHtml(res.error)}` : ""
+    }. Start again from the merchant page.</p>`;
+    return;
+  }
+
+  state = res;
+  renderDetails();
+  payPanel.hidden = false;
+  pipeline.hidden = false;
+  setStep("quoted", "done");
+  setStep("awaiting", "active");
+
+  payBtn.addEventListener("click", onIHavePaid);
 }
 
-async function openTransaction(id) {
-  const created = await send("CREATE_TRANSACTION", {
-    quoteId: id,
-    merchantName: merchant,
-    sourceUrl: location.href,
-  });
-  transaction = created.transaction;
-  funding = created.fundingInstructions;
-  const priorRisk = quote && quote.risk ? quote.risk : null;
-  quote = {
-    quoteId: id,
-    sourceAmount: transaction.merchantAmount,
-    sourceCurrency: transaction.merchantCurrency,
-    midNgn: transaction.merchantAmount * transaction.exchangeRate,
-    fee: transaction.amountToTransferNGN - transaction.merchantAmount * transaction.exchangeRate,
-    spreadPercent: transaction.spreadPercent,
-    totalNgn: transaction.amountToTransferNGN,
-    rate: transaction.amountToTransferNGN / transaction.merchantAmount,
-    exchangeRate: transaction.exchangeRate,
-    risk: priorRisk,
-  };
-}
+function renderDetails() {
+  const tx = state.transaction;
+  const fi = state.fundingInstructions;
 
-function renderQuoteFromTransaction() {
-  const feeLabel = quote.spreadPercent != null ? `${quote.spreadPercent}%` : "fee";
-  const riskLine =
-    quote.risk && quote.risk.decision
-      ? `<p class="muted">Risk ${escapeHtml(quote.risk.decision)} (${Number(quote.risk.score).toFixed(2)})${
-          quote.risk.model ? ` · ${escapeHtml(quote.risk.model)}` : ""
-        }</p>`
-      : "";
-  quotePanel.innerHTML = `
-    <p class="muted">${escapeHtml(merchant)}</p>
-    <div class="totals">
-      <div><span>Foreign amount</span><span>${formatFx(quote.sourceAmount, quote.sourceCurrency)}</span></div>
-      <div><span>Mid-market</span><span>${formatNaira(quote.midNgn)}</span></div>
-      <div><span>Spread (${feeLabel})</span><span>${formatNaira(Math.max(0, quote.fee))}</span></div>
-      <div><span>You pay</span><strong>${formatNaira(quote.totalNgn)}</strong></div>
-    </div>
-    ${riskLine}
-  `;
-}
+  // A Naira checkout settles 1:1 with no spread — show only the amount, not the
+  // FX rate / fee rows (which would read "Rate ₦1 / NGN", "Fee (0%) ₦0").
+  const isPassThrough = tx.exchangeRate === 1 && tx.spreadPercent === 0;
 
-function renderFunding() {
-  sessionIdEl.textContent = transaction.id;
-  payAmountEl.textContent = formatNaira(
-    funding && funding.amount != null ? funding.amount : quote.totalNgn
-  );
-  if (nairaEl) nairaEl.textContent = funding.accountNumber || "—";
-  if (bankEl) bankEl.textContent = funding.bank || "—";
-  if (accountNameEl) accountNameEl.textContent = funding.accountName || "—";
-  if (referenceEl) referenceEl.textContent = funding.reference || "—";
-}
-
-simulateBtn.addEventListener("click", async () => {
-  if (!transaction) return;
-  simulateBtn.disabled = true;
-  simulateBtn.textContent = "Confirming transfer…";
-
-  try {
-    await send("CONFIRM_PAYMENT", { transactionId: transaction.id });
-    setStep("awaiting", "done");
-    setStep("received", "active");
-    simulateBtn.textContent = "Settling with merchant…";
-
-    const finalTx = await pollUntilDone(transaction.id);
-    if (finalTx.simplifiedStatus === "failed") {
-      throw new Error(`Payment failed (${finalTx.status})`);
-    }
-
-    setStep("settled", "done");
-    simulateBtn.textContent = "Returning to merchant…";
-
-    window.setTimeout(() => {
-      chrome.runtime.sendMessage({
-        type: "SETTLEMENT_COMPLETE",
-        payload: {
-          sessionId: finalTx.id,
-          merchant,
-          amount,
-          currency,
-          totalNgn: finalTx.amountToTransferNGN || quote.totalNgn,
-          status: "SETTLED",
-          at: Date.now(),
-        },
-      });
-    }, 450);
-  } catch (error) {
-    simulateBtn.disabled = false;
-    simulateBtn.textContent = "I have paid this Naira amount";
-    quotePanel.insertAdjacentHTML(
-      "beforeend",
-      `<p class="muted">${escapeHtml(error.message || "Payment failed")}</p>`
+  const rows = [];
+  if (!isPassThrough) {
+    const base = tx.merchantAmount * tx.exchangeRate;
+    const feeNgn = Math.max(0, tx.amountToTransferNGN - base);
+    rows.push(
+      `<div><span>Foreign amount</span><span>${formatFx(tx.merchantAmount, tx.merchantCurrency)}</span></div>`,
+      `<div><span>Rate</span><span>₦${Math.round(tx.exchangeRate).toLocaleString("en-NG")} / ${escapeHtml(tx.merchantCurrency)}</span></div>`,
+      `<div><span>Fee (${escapeHtml(String(tx.spreadPercent))}%)</span><span>${formatNaira(feeNgn)}</span></div>`
     );
   }
-});
+  rows.push(`<div><span>You pay</span><strong>${formatNaira(tx.amountToTransferNGN)}</strong></div>`);
 
-async function pollUntilDone(transactionId) {
-  const maxAttempts = 40;
-  for (let i = 0; i < maxAttempts; i += 1) {
-    const tx = await send("GET_PAYMENT_STATUS", { transactionId });
-    applyStatus(tx.status, tx.simplifiedStatus);
-    if (tx.simplifiedStatus === "successful" || tx.simplifiedStatus === "failed") {
-      return tx;
-    }
-    await wait(500);
-  }
-  throw new Error("Timed out waiting for settlement");
+  quotePanel.innerHTML = `
+    <p class="muted">${escapeHtml(state.merchant)}</p>
+    <div class="totals">
+      ${rows.join("\n      ")}
+    </div>
+  `;
+
+  accountNameEl.textContent = fi.accountName;
+  accountNumberEl.textContent = fi.accountNumber;
+  bankEl.textContent = fi.bank;
+  referenceEl.textContent = fi.reference;
+  payAmountEl.textContent = formatNaira(fi.amount);
+  sessionIdEl.textContent = tx.id;
 }
 
-function applyStatus(status, simplified) {
-  if (status === "TRANSFER_CONFIRMED") {
-    setStep("received", "done");
-    setStep("converting", "active");
-  } else if (status === "CARD_CREATING" || status === "CARD_FUNDED") {
-    setStep("received", "done");
-    setStep("converting", "done");
-    setStep("paying", "active");
-  } else if (status === "PAYMENT_PROCESSING") {
-    setStep("converting", "done");
-    setStep("paying", "active");
-  } else if (status === "PAYMENT_SUCCESSFUL" || simplified === "successful") {
-    setStep("paying", "done");
-    setStep("settled", "done");
-  } else if (simplified === "processing") {
-    setStep("received", "done");
-    setStep("converting", "active");
+async function onIHavePaid() {
+  if (polling) return;
+  hideError();
+  payBtn.disabled = true;
+  payBtn.textContent = "Confirming…";
+
+  const confirm = await sendMessage({
+    type: "CONFIRM_TRANSFER",
+    payload: { transactionId: txnId },
+  });
+
+  if (!confirm || !confirm.ok) {
+    payBtn.disabled = false;
+    payBtn.textContent = "I have paid this Naira amount";
+    showError(confirm && confirm.error ? confirm.error : "Could not confirm right now. Try again.");
+    return;
   }
+
+  setStep("awaiting", "done");
+  payBtn.textContent = "Processing…";
+  pollStatus();
+}
+
+function pollStatus() {
+  polling = true;
+  const startedAt = Date.now();
+
+  const tick = async () => {
+    const res = await sendMessage({ type: "GET_STATUS", payload: { transactionId: txnId } });
+
+    if (res && res.ok) {
+      applyStatus(res);
+      if (res.simplifiedStatus === "successful") return onSettled();
+      if (res.simplifiedStatus === "failed") return onFailed();
+    }
+
+    if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+      polling = false;
+      payBtn.textContent = "Still verifying…";
+      showError(
+        "This is taking longer than expected. Your transfer is still being verified — you can safely leave this open."
+      );
+      return;
+    }
+
+    window.setTimeout(tick, POLL_INTERVAL_MS);
+  };
+
+  tick();
+}
+
+// Map the transaction's status onto the visual pipeline. simplifiedStatus is the
+// contract; the internal status (when present) lets us light up finer steps.
+function applyStatus(res) {
+  const internal = res.status || "";
+  const simple = res.simplifiedStatus;
+
+  if (simple === "pending") {
+    setStep("awaiting", "active");
+    return;
+  }
+
+  if (simple === "processing") {
+    setStep("awaiting", "done");
+    setStep("received", "done");
+    if (internal === "CARD_FUNDED" || internal === "PAYMENT_PROCESSING") {
+      setStep("converting", "done");
+      setStep("paying", "active");
+    } else {
+      setStep("converting", "active");
+    }
+    return;
+  }
+
+  if (simple === "successful") {
+    ["awaiting", "received", "converting", "paying"].forEach((step) => setStep(step, "done"));
+    setStep("settled", "done");
+  }
+}
+
+function onSettled() {
+  polling = false;
+  setStep("settled", "done");
+  payBtn.textContent = "Returning to merchant…";
+
+  const tx = state.transaction;
+  window.setTimeout(() => {
+    chrome.runtime.sendMessage({
+      type: "SETTLEMENT_COMPLETE",
+      payload: {
+        sessionId: tx.id,
+        merchant: state.merchant,
+        amount: tx.merchantAmount,
+        currency: tx.merchantCurrency,
+        totalNgn: tx.amountToTransferNGN,
+        status: "SETTLED",
+        at: Date.now(),
+      },
+    });
+  }, 600);
+}
+
+function onFailed() {
+  polling = false;
+  payBtn.disabled = false;
+  payBtn.textContent = "I have paid this Naira amount";
+  showError("The payment could not be completed. No Naira was captured — you can try again.");
+}
+
+function sendMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => resolve(response));
+  });
 }
 
 function setStep(name, state) {
@@ -211,37 +211,24 @@ function setStep(name, state) {
   });
 }
 
-function send(type, payload) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, payload }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      if (!response) {
-        reject(new Error("No response from extension"));
-        return;
-      }
-      if (response.error) {
-        reject(
-          Object.assign(new Error(response.error), {
-            code: response.code || null,
-            details: response.details || null,
-          })
-        );
-        return;
-      }
-      resolve(response);
-    });
-  });
+function showError(message) {
+  if (!errorEl) return;
+  errorEl.textContent = message;
+  errorEl.hidden = false;
 }
 
-function wait(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function hideError() {
+  if (!errorEl) return;
+  errorEl.hidden = true;
+  errorEl.textContent = "";
 }
 
 function formatFx(value, code) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: code }).format(value);
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: code }).format(value);
+  } catch (_error) {
+    return `${code} ${value}`;
+  }
 }
 
 function formatNaira(value) {
