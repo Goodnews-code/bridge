@@ -1,6 +1,6 @@
-# PARON Backend
+# Bridge Backend
 
-Payment-orchestration backend for the Paron Chrome Extension. It moves **all
+Payment-orchestration backend for the Bridge Chrome Extension. It moves **all
 sensitive payment logic out of the browser** and behind secure REST APIs:
 currency conversion, spread, NGN funding verification, restricted virtual-card
 issuing/funding, and the final merchant authorization.
@@ -176,7 +176,7 @@ everything with Zod and **exits on boot** if the config is invalid or unsafe.
 | `CARD_PROVIDER_WEBHOOK_SECRET` | `whsec_card_dev` | HMAC secret for card webhooks |
 | `PAYMENT_PROVIDER` | `mock` | NGN collection provider selector |
 | `PAYMENT_PROVIDER_SECRET` | `whsec_dev` | HMAC secret for collection webhooks |
-| `COLLECTION_ACCOUNT_NAME` | `PARON PAYMENTS (SANDBOX)` | Name shown on funding instructions |
+| `COLLECTION_ACCOUNT_NAME` | `BRIDGE PAYMENTS (SANDBOX)` | Name shown on funding instructions |
 | `SIMULATE_TRANSFERS` | `false` | **Dev only.** Auto-fire a signed webhook after `/confirm`. Refuses to start if `true` in production |
 
 > `.env` is git-ignored and **must never be committed**. Only `.env.example`
@@ -224,7 +224,7 @@ require the `x-api-key` header. Every response uses a consistent envelope:
 curl -s http://localhost:4000/health
 ```
 ```json
-{ "ok": true, "data": { "status": "ok", "service": "paron-backend", "environment": "development", "time": "2026-08-19T04:00:00.000Z" } }
+{ "ok": true, "data": { "status": "ok", "service": "bridge-backend", "environment": "development", "time": "2026-08-19T04:00:00.000Z" } }
 ```
 
 ### `POST /api/v1/payment-quotes` — create a quote
@@ -234,7 +234,7 @@ Honors an optional `Idempotency-Key` header. Rate-limited to 30/min.
 
 ```bash
 curl -s -X POST http://localhost:4000/api/v1/payment-quotes \
-  -H "x-api-key: paron_dev_key_change_me" \
+  -H "x-api-key: bridge_dev_key_change_me" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: demo-quote-1" \
   -d '{ "amount": 20, "currency": "USD", "merchantName": "Acme Store" }'
@@ -268,7 +268,7 @@ expired quote with `409 QUOTE_EXPIRED`. Idempotency-Key supported.
 
 ```bash
 curl -s -X POST http://localhost:4000/api/v1/transactions \
-  -H "x-api-key: paron_dev_key_change_me" \
+  -H "x-api-key: bridge_dev_key_change_me" \
   -H "Content-Type: application/json" \
   -d '{ "quoteId": "quote_…", "merchantName": "Acme Store" }'
 ```
@@ -290,10 +290,10 @@ curl -s -X POST http://localhost:4000/api/v1/transactions \
       "createdAt": "…", "updatedAt": "…", "expiresAt": "…"
     },
     "fundingInstructions": {
-      "accountName": "PARON PAYMENTS (SANDBOX)",
+      "accountName": "BRIDGE PAYMENTS (SANDBOX)",
       "accountNumber": "…",
-      "bank": "Paron Sandbox Bank",
-      "reference": "PARON-…",
+      "bank": "Bridge Sandbox Bank",
+      "reference": "BRIDGE-…",
       "amount": 30600,
       "currency": "NGN",
       "sandbox": true
@@ -306,7 +306,7 @@ curl -s -X POST http://localhost:4000/api/v1/transactions \
 
 ```bash
 curl -s http://localhost:4000/api/v1/transactions/txn_… \
-  -H "x-api-key: paron_dev_key_change_me"
+  -H "x-api-key: bridge_dev_key_change_me"
 ```
 
 Returns the transaction view including `status` (internal) and
@@ -322,13 +322,13 @@ correctly-signed webhook so the real verification path runs offline. Returns
 
 ```bash
 curl -s -X POST http://localhost:4000/api/v1/transactions/txn_…/confirm \
-  -H "x-api-key: paron_dev_key_change_me"
+  -H "x-api-key: bridge_dev_key_change_me"
 ```
 
 ### `POST /api/v1/webhooks/payment-provider` — inbound NGN transfer (provider → backend)
 
 No API key; authenticated by HMAC signature over the **raw body**. Send the
-signature in `x-paron-signature` (or `x-webhook-signature`). See
+signature in `x-bridge-signature` (or `x-webhook-signature`). See
 [Webhook flow](#webhook-flow) for a signed curl example. Returns `200` for
 verified events (including accepted-but-ignored duplicates); `401` on a bad
 signature; `400` on amount/currency mismatch.
@@ -478,13 +478,13 @@ user's `/confirm` claim.
 
 ```bash
 SECRET="whsec_dev_change_me"
-REF="PARON-…"            # from the transaction's fundingInstructions.reference
+REF="BRIDGE-…"            # from the transaction's fundingInstructions.reference
 BODY='{"event":"charge.success","data":{"id":"evt_1","reference":"'"$REF"'","amount":30600,"currency":"NGN","status":"success"}}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
 
 curl -s -X POST http://localhost:4000/api/v1/webhooks/payment-provider \
   -H "Content-Type: application/json" \
-  -H "x-paron-signature: $SIG" \
+  -H "x-bridge-signature: $SIG" \
   -d "$BODY"
 ```
 
@@ -492,34 +492,44 @@ curl -s -X POST http://localhost:4000/api/v1/webhooks/payment-provider \
 
 ## Chrome-extension integration
 
-The extension's mock lives at `../pay-extension/src/services/paymentApi.ts`. Its
-function signatures are the intended contract; **only the bodies change** —
-replace the timer mocks with `fetch` calls to this backend. The extension is not
-modified as part of this task.
+The client is the MV3 extension at `../bridge-extension` (vanilla JS — no build
+step). It is wired to this backend: real quotes, real funding instructions, and
+real status polling replace what used to be client-side FX and a faked
+settlement.
 
-| Extension function (mock) | Backend call |
-| --- | --- |
-| `createPayment(context)` | `POST /api/v1/payment-quotes` `{ amount, currency, merchantName }` **then** `POST /api/v1/transactions` `{ quoteId, merchantName, sourceUrl }` |
-| `getTransferInstructions(payment)` | Read `fundingInstructions` from the `POST /transactions` response |
-| `confirmPayment(payment)` | `POST /api/v1/transactions/:id/confirm`, then poll status |
-| `getPaymentStatus(id)` | `GET /api/v1/transactions/:id` → `data.simplifiedStatus` |
+**Where the network lives.** Every backend `fetch` runs in the service worker
+(`js/background.js`). Because the service worker holds `host_permissions` for the
+API origin, its cross-origin requests bypass CORS — no preflight to satisfy. The
+content script (`js/content.js`) and the checkout page (`js/checkout.js`) never
+touch the network or the API key; they send `chrome.runtime` messages to the
+worker, which owns `chrome.storage.session`.
 
-The backend's `simplifiedStatus` is exactly the extension's `PaymentStatus`
-union (`pending | processing | successful | failed`), so the popup's existing
-state handling keeps working. Example replacement:
+**Config.** Base URL and key are hard-coded in `js/config.js`, loaded into the
+worker via `importScripts("config.js")`:
 
-```ts
-const API_BASE = import.meta.env.VITE_PARON_API ?? 'http://localhost:4000'
-const KEY = import.meta.env.VITE_PARON_API_KEY   // injected at build; never hard-coded
-
-export async function getPaymentStatus(paymentId: string): Promise<PaymentStatus> {
-  const res = await fetch(`${API_BASE}/api/v1/transactions/${paymentId}`, {
-    headers: { 'x-api-key': KEY },
-  })
-  const body = await res.json()
-  return body.data.simplifiedStatus
-}
+```js
+const BRIDGE_API_BASE = "http://localhost:4000";
+const BRIDGE_API_KEY  = "bridge_dev_key_change_me"; // must match backend .env API_KEY
 ```
+
+`BRIDGE_API_KEY` **must equal** the backend's `.env` `API_KEY`, and
+`host_permissions` in `manifest.json` must include `BRIDGE_API_BASE` (`http://localhost:4000/*`).
+
+**Message → backend call.** The worker's `api(path, { method, body })` helper
+sets `x-api-key` + `Content-Type` and unwraps the `{ ok, data }` envelope:
+
+| Worker message (from page) | Backend call |
+| --- | --- |
+| `GET_QUOTE` `{ amount, currency, merchant }` | `POST /api/v1/payment-quotes` `{ amount, currency, merchantName }` → quote view incl. `quoteId` |
+| `OPEN_CHECKOUT` `{ quoteId, amount, currency, merchant, sourceUrl }` | `POST /api/v1/transactions` `{ quoteId, merchantName, sourceUrl }`; on **409 `QUOTE_EXPIRED`** re-quotes once from the payload, then stores `fundingInstructions` and opens `pages/checkout.html?txn=:id` |
+| `GET_TRANSACTION` `{ transactionId }` | reads the stored transaction (funding instructions + figures) from `chrome.storage.session` |
+| `CONFIRM_TRANSFER` `{ transactionId }` | `POST /api/v1/transactions/:id/confirm` (with `SIMULATE_TRANSFERS=true` this auto-fires the signed webhook) |
+| `GET_STATUS` `{ transactionId }` | `GET /api/v1/transactions/:id` → `{ simplifiedStatus, status, transaction }` |
+
+The backend's `simplifiedStatus` (`pending | processing | successful | failed`)
+drives the checkout pipeline directly: the page polls `GET_STATUS` every ~1.5s
+(bounded ~60s) after `CONFIRM_TRANSFER` and advances the steps, ending on
+`successful` (returns to the merchant) or `failed` (re-enables the button).
 
 > The extension holds only the client `x-api-key` — never a provider secret, FX
 > key, or card credential. Those stay server-side.
@@ -534,21 +544,21 @@ locally:
 ```bash
 # 1. quote  ($20 → ₦30,600)
 curl -s -X POST http://localhost:4000/api/v1/payment-quotes \
-  -H "x-api-key: paron_dev_key_change_me" -H "Content-Type: application/json" \
+  -H "x-api-key: bridge_dev_key_change_me" -H "Content-Type: application/json" \
   -d '{"amount":20,"currency":"USD"}'
 
 # 2. transaction (returns id + NGN funding instructions, status AWAITING_TRANSFER)
 curl -s -X POST http://localhost:4000/api/v1/transactions \
-  -H "x-api-key: paron_dev_key_change_me" -H "Content-Type: application/json" \
+  -H "x-api-key: bridge_dev_key_change_me" -H "Content-Type: application/json" \
   -d '{"quoteId":"<quoteId>","merchantName":"Acme Store"}'
 
 # 3. confirm → auto-fires a correctly-signed webhook → full pipeline runs
 curl -s -X POST http://localhost:4000/api/v1/transactions/<txnId>/confirm \
-  -H "x-api-key: paron_dev_key_change_me"
+  -H "x-api-key: bridge_dev_key_change_me"
 
 # 4. poll until PAYMENT_SUCCESSFUL
 curl -s http://localhost:4000/api/v1/transactions/<txnId> \
-  -H "x-api-key: paron_dev_key_change_me"
+  -H "x-api-key: bridge_dev_key_change_me"
 ```
 
 ### Automated in-process checks

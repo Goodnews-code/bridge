@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bridge",
-  "version": "0.1.8",
+  "version": "0.2.5",
   "description": "Pay foreign checkouts in Naira. No Grey. No virtual dollar card.",
   "icons": {
     "16": "icons/icon16.png",
@@ -28,7 +28,7 @@
     }
   ],
   "permissions": ["storage", "tabs"],
-  "host_permissions": ["https://open.er-api.com/*"],
+  "host_permissions": ["http://localhost:4000/*", "http://127.0.0.1:4000/*"],
   "web_accessible_resources": [
     {
       "resources": [

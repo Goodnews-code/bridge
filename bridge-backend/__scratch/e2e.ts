@@ -1,5 +1,5 @@
 /**
- * End-to-end verification of the PARON backend, run entirely in-process
+ * End-to-end verification of the Bridge backend, run entirely in-process
  * (the sandbox forbids TCP binding). Drives the real Express app via inject().
  *
  * Run: node --import tsx __scratch/e2e.ts
@@ -9,7 +9,7 @@
 // process.env at module-load, so we set here and dynamic-import below.
 process.env.NODE_ENV = "development";
 process.env.PORT = "4999";
-process.env.API_KEY = "paron_test_key";
+process.env.API_KEY = "bridge_test_key";
 process.env.CURRENCY_PROVIDER = "static";
 process.env.CURRENCY_PROVIDER_API_KEY = "";
 process.env.CURRENCY_SPREAD_PERCENT = "2";
@@ -24,7 +24,7 @@ const { inject } = await import("./inject.ts");
 const { collectionProvider } = await import("../src/providers/payments/collection/index.js");
 const { quoteStore } = await import("../src/store/memoryStore.js");
 
-const API = "paron_test_key";
+const API = "bridge_test_key";
 const app = createApp();
 
 let passed = 0;
@@ -208,7 +208,7 @@ console.log("\n[8] Webhook signature verification");
   const bad = await inject(app, {
     method: "POST",
     path: "/api/v1/webhooks/payment-provider",
-    headers: { "x-paron-signature": "sha256=deadbeef" },
+    headers: { "x-bridge-signature": "sha256=deadbeef" },
     body: payload,
   });
   check("bad signature → 401", bad.statusCode === 401, bad.statusCode);
@@ -224,7 +224,7 @@ console.log("\n[8] Webhook signature verification");
   const good = await inject(app, {
     method: "POST",
     path: "/api/v1/webhooks/payment-provider",
-    headers: { "x-paron-signature": goodSig },
+    headers: { "x-bridge-signature": goodSig },
     body: payload,
   });
   check("valid signature → 200", good.statusCode === 200, good.statusCode);
@@ -242,7 +242,7 @@ console.log("\n[8] Webhook signature verification");
   const replay = await inject(app, {
     method: "POST",
     path: "/api/v1/webhooks/payment-provider",
-    headers: { "x-paron-signature": goodSig },
+    headers: { "x-bridge-signature": goodSig },
     body: payload,
   });
   const replayData = replay.json<{ data: any }>().data;
@@ -270,7 +270,7 @@ console.log("\n[9] Amount mismatch rejected");
   const sig = collectionProvider.signPayload(payload);
   const res = await inject(app, {
     method: "POST", path: "/api/v1/webhooks/payment-provider",
-    headers: { "x-paron-signature": sig }, body: payload,
+    headers: { "x-bridge-signature": sig }, body: payload,
   });
   check("amount mismatch → 400", res.statusCode === 400, res.statusCode + " " + res.rawBody);
 }

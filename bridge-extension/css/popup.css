@@ -94,3 +94,18 @@ button:hover {
   margin-top: 12px;
   line-height: 1.4;
 }
+
+.stack-status {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--brown-muted);
+}
+
+.stack-status[data-state="up"] {
+  color: #2f6b3c;
+}
+
+.stack-status[data-state="down"] {
+  color: var(--burgundy, #6e1f33);
+}

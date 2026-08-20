@@ -49,7 +49,7 @@ function buildCorsOptions(): CorsOptions {
       "x-api-key",
       "x-request-id",
       "idempotency-key",
-      "x-paron-signature",
+      "x-bridge-signature",
       "x-webhook-signature",
     ],
     methods: ["GET", "POST", "OPTIONS"],

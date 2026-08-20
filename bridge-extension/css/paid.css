@@ -1,4 +1,4 @@
-#nairadirect-paid-banner {
+#bridge-paid-banner {
   position: fixed;
   left: 0;
   right: 0;
@@ -16,6 +16,6 @@
   box-sizing: border-box;
 }
 
-body.nairadirect-paid {
+body.bridge-paid {
   padding-top: 56px;
 }

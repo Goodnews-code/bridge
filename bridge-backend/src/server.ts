@@ -10,7 +10,7 @@ import { logger } from "./utils/logger.js";
 const app = createApp();
 
 const server: Server = app.listen(env.PORT, () => {
-  logger.info("Paron backend started", {
+  logger.info("Bridge backend started", {
     port: env.PORT,
     environment: env.NODE_ENV,
     currencyProvider: env.CURRENCY_PROVIDER,

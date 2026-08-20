@@ -5,7 +5,7 @@ import type { CardProvider } from "./types.js";
 /**
  * Select the card issuing provider from configuration. Only the sandbox mock
  * exists in the MVP; real providers (Sudo, Bridgecard, etc.) would be added
- * here behind the same CardProvider interface once Paron's use case is approved.
+ * here behind the same CardProvider interface once Bridge's use case is approved.
  */
 function createCardProvider(): CardProvider {
   switch (env.CARD_PROVIDER) {

@@ -42,7 +42,7 @@ bridge-extension/
 
 1. Zip `bridge-extension` (manifest.json at the **inside** of the zip folder).
 2. Put the zip next to `bridge-web/index.html`.
-3. Deploy `nairadirect-web` to Vercel / Netlify / GitHub Pages.
+3. Deploy `bridge-web` to Vercel / Netlify / GitHub Pages.
 4. Share that URL. People download the zip, unzip, Load unpacked.
 
 ## Permissions we asked for

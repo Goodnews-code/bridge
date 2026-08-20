@@ -1,0 +1,31 @@
+{
+  "name": "bridge-ml",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Bridge FX checkout risk model (logistic scoring for allow / review / deny).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/cli-demo.ts",
+    "demo": "tsx src/cli-demo.ts",
+    "data": "python python/generate_data.py",
+    "train": "python python/train.py",
+    "ml": "python python/generate_data.py && python python/train.py && npm run build"
+  },
+  "keywords": ["bridge", "risk", "ml", "fx"],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}

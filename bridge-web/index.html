@@ -7,67 +7,101 @@
     <link rel="icon" href="./favicon.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./css/landing.css" />
   </head>
   <body>
-    <main>
-      <div class="hero">
-        <span class="mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M8 16.6Q16 8.2 24 16.6Z" fill="#6E1F33"/><path d="M6.5 16.8C6.5 16.8 11.2 7.6 16 7.6S25.5 16.8 25.5 16.8" stroke="#F6F0E4" stroke-width="2.6" stroke-linecap="round"/><rect x="6" y="15.7" width="20" height="2.7" rx="0.6" fill="#B08D57"/><rect x="8.3" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4"/><rect x="20.4" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4"/></svg></span>
-        <div>
-          <h1>Bridge</h1>
+    <div class="page">
+      <header class="top">
+        <div class="brand">
+          <span class="mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M8 16.6Q16 8.2 24 16.6Z" fill="#6E1F33" />
+              <path
+                d="M6.5 16.8C6.5 16.8 11.2 7.6 16 7.6S25.5 16.8 25.5 16.8"
+                stroke="#F6F0E4"
+                stroke-width="2.6"
+                stroke-linecap="round"
+              />
+              <rect x="6" y="15.7" width="20" height="2.7" rx="0.6" fill="#B08D57" />
+              <rect x="8.3" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4" />
+              <rect x="20.4" y="18" width="3.3" height="8.2" rx="0.5" fill="#F6F0E4" />
+            </svg>
+          </span>
+          <span class="brand-name">Bridge</span>
+        </div>
+        <nav class="top-nav" aria-label="Page">
+          <a href="#install">Install</a>
+          <a href="#how">How it works</a>
+          <a href="./demo.html">Demo</a>
+        </nav>
+      </header>
+
+      <section class="hero" aria-labelledby="hero-brand">
+        <div class="hero-copy">
+          <p class="hero-kicker mobile-only">Chrome extension</p>
+          <h1 id="hero-brand">Bridge</h1>
+          <p class="tagline">Pay dollar checkouts in Naira.</p>
           <p class="lead">
-            Pay dollar checkouts in Naira. No Grey. No virtual dollar card.
-            Install the extension, open a foreign payment page, click Pay in Naira.
+            No Grey. No virtual dollar card. Pay from your bank account — Wema settles the merchant in FX.
+          </p>
+          <div class="actions">
+            <a class="btn primary" href="./Bridge-extension.zip" download>Get the Chrome extension</a>
+            <a class="btn secondary" href="./demo.html">Open demo checkout</a>
+          </div>
+          <p class="note">
+            Chrome does not allow one-click install from a website. Download the zip, then Load unpacked (~30 seconds).
           </p>
         </div>
-      </div>
 
-      <p class="warn">
-        Chrome will not let a website silently install an extension. Anyone can
-        <strong>download the zip</strong> and load it in 30 seconds, or we publish
-        later on the Chrome Web Store (Google review, not instant).
-      </p>
+        <aside class="hero-stage" aria-hidden="true">
+          <div class="stage-plane">
+            <div class="stage-fx">
+              <span class="stage-label">Foreign checkout</span>
+              <strong>$42.00 USD</strong>
+            </div>
+            <div class="stage-rail"></div>
+            <div class="stage-ngn">
+              <span class="stage-label">You pay</span>
+              <strong>₦64,260</strong>
+            </div>
+            <p class="stage-caption">Quoted in Naira · settled in FX</p>
+          </div>
+        </aside>
+      </section>
 
-      <div class="actions">
-        <a class="btn primary" href="./Bridge-extension.zip" download>Download extension zip</a>
-        <a class="btn ghost" href="./demo.html">Open demo checkout</a>
-      </div>
-
-      <section>
-        <h2>Install on Chrome (hackathon / teammates)</h2>
-        <ol>
-          <li>Download the zip and unzip it. You should see <code>manifest.json</code> inside the folder.</li>
-          <li>Open <code>chrome://extensions</code>.</li>
-          <li>Turn on <strong>Developer mode</strong> (top right).</li>
-          <li>Click <strong>Load unpacked</strong> and select the unzipped <code>nairadirect-extension</code> folder.</li>
-          <li>Pin Bridge. Open the <a href="./demo.html">demo checkout</a> — the overlay should appear.</li>
+      <section class="block how" id="how">
+        <div class="block-head">
+          <h2>How it works</h2>
+          <p class="block-lead desktop-only">Four steps from foreign total to Naira transfer.</p>
+        </div>
+        <ol class="flow">
+          <li><span>1</span><p>Detects a foreign checkout</p></li>
+          <li><span>2</span><p>Quotes the amount in Naira</p></li>
+          <li><span>3</span><p>You pay from your bank</p></li>
+          <li><span>4</span><p>Bridge settles the merchant in FX</p></li>
         </ol>
       </section>
 
-      <section>
-        <h2>Make it live for anyone</h2>
-        <div class="grid">
-          <article>
-            <h3>Today — this page + zip</h3>
-            <p>Host this folder on Vercel, Netlify, or GitHub Pages. Share the URL. Judges download zip and Load unpacked. This is the realistic Day-1 path.</p>
-          </article>
-          <article>
-            <h3>Later — Chrome Web Store</h3>
-            <p>Needs a Google account, a one-time $5 developer fee, screenshots, privacy policy, and Google review (hours to weeks). Then install is one click from the Store.</p>
-          </article>
+      <section class="block install-block" id="install">
+        <div class="block-head">
+          <h2>Install</h2>
+          <p class="block-lead desktop-only">Load unpacked once. Pin Bridge. Pay in Naira on the next dollar checkout.</p>
         </div>
+        <ol class="install">
+          <li>Download and unzip. Confirm you see <code>manifest.json</code>.</li>
+          <li>Open <code>chrome://extensions</code> → turn on <strong>Developer mode</strong>.</li>
+          <li>Click <strong>Load unpacked</strong> → select the <code>bridge-extension</code> folder.</li>
+          <li>Pin Bridge → open the <a href="./demo.html">demo checkout</a> → <strong>Pay in Naira</strong>.</li>
+        </ol>
       </section>
 
-      <section>
-        <h2>What this prototype does</h2>
-        <ul>
-          <li>Detects USD / EUR / GBP checkout pages.</li>
-          <li>Quotes Naira using a live FX rate plus 1.5% fee.</li>
-          <li>Opens a Wema-style Naira checkout (demo NUBAN + pipeline).</li>
-          <li>Does not inject card numbers into Stripe. Does not issue a user virtual card.</li>
-        </ul>
-      </section>
-    </main>
+      <footer class="foot">
+        Hackaholics prototype for Wema. Settlement in this build is sandboxed — you never get a consumer virtual dollar card.
+      </footer>
+    </div>
   </body>
 </html>

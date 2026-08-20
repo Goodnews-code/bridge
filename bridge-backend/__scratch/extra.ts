@@ -3,7 +3,7 @@
  * and FX live-provider wiring. Run: node --import tsx __scratch/extra.ts
  */
 process.env.NODE_ENV = "development";
-process.env.API_KEY = "paron_test_key";
+process.env.API_KEY = "bridge_test_key";
 process.env.CURRENCY_PROVIDER = "static";
 process.env.PAYMENT_PROVIDER_SECRET = "whsec_test_secret";
 process.env.CARD_PROVIDER_WEBHOOK_SECRET = "whsec_card_test";
@@ -15,7 +15,7 @@ const { inject } = await import("./inject.ts");
 const { sign } = await import("../src/utils/hmac.js");
 const { _internal } = await import("../src/utils/logger.js");
 
-const API = "paron_test_key";
+const API = "bridge_test_key";
 const app = createApp();
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, detail?: unknown): void {

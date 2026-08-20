@@ -12,7 +12,7 @@ export function generateId(prefix: string): string {
  * Short human-friendly reference (uppercase alphanumeric) for bank transfers.
  * Users type/paste this, so keep it short and unambiguous.
  */
-export function generateReference(prefix = "PARON"): string {
+export function generateReference(prefix = "BRIDGE"): string {
   const raw = randomBytes(6).toString("hex").toUpperCase();
   return `${prefix}-${raw}`;
 }

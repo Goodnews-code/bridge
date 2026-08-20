@@ -11,24 +11,43 @@
 
   chrome.runtime.sendMessage({ type: "CLAIM_RECEIPT" }, (receipt) => {
     if (receipt) {
-      nairaDirectShowPaid(receipt);
+      bridgeShowPaid(receipt);
       return;
     }
     offerPayInNaira();
   });
 
   function offerPayInNaira() {
-    chrome.runtime.sendMessage({ type: "GET_QUOTE", payload: detection }, async (quote) => {
-      if (!quote || quote.error) return;
-      await nairaDirectMountOffer(document.body, detection, quote, {
-        onYes: () => {
-          chrome.runtime.sendMessage({ type: "OPEN_CHECKOUT", payload: detection });
-        },
-        onNo: () => {
-          const offer = document.querySelector(".nd-wrap");
-          if (offer) offer.remove();
-        },
-      });
-    });
+    chrome.runtime.sendMessage(
+      {
+        type: "GET_QUOTE",
+        payload: { ...detection, sourceUrl: location.href },
+      },
+      async (quote) => {
+        if (!quote || quote.error) {
+          if (quote && quote.code === "RISK_BLOCKED") {
+            await bridgeMountBlocked(document.body, detection, quote, {
+              onDismiss: () => {
+                const offer = document.querySelector(".nd-wrap");
+                if (offer) offer.remove();
+              },
+            });
+          }
+          return;
+        }
+        await bridgeMountOffer(document.body, detection, quote, {
+          onYes: () => {
+            chrome.runtime.sendMessage({
+              type: "OPEN_CHECKOUT",
+              payload: { ...detection, quoteId: quote.quoteId },
+            });
+          },
+          onNo: () => {
+            const offer = document.querySelector(".nd-wrap");
+            if (offer) offer.remove();
+          },
+        });
+      }
+    );
   }
 })();

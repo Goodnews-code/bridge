@@ -2,7 +2,7 @@ import type { Currency } from "./money.js";
 
 /**
  * A payment quote: the result of converting a merchant amount into the NGN sum
- * the user must transfer, including Paron's exchange-rate spread. Quotes expire
+ * the user must transfer, including Bridge's exchange-rate spread. Quotes expire
  * so a stale FX rate can never be used to fund a payment.
  */
 export interface Quote {

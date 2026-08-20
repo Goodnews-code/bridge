@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Test Bridge on a live gateway</title>
+    <link rel="stylesheet" href="./css/landing.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="top">
+        <div class="brand">
+          <span class="brand-name">Bridge · live gateway test</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <h1 style="font-size: 2rem">Test on Stripe</h1>
+        <p class="lead">
+          Use a real Stripe Checkout or Payment Link. Bridge detects hosted pages like
+          <code>checkout.stripe.com</code> and <code>buy.stripe.com</code>.
+        </p>
+      </section>
+
+      <section class="block">
+        <h2>Setup (5 minutes)</h2>
+        <ol class="install">
+          <li>Create a free Stripe account → turn on <strong>Test mode</strong>.</li>
+          <li>Products → Add product (e.g. “Northwind Pro”) at <strong>$12.99 USD</strong>.</li>
+          <li>Payment links → Create link → copy the URL (<code>https://buy.stripe.com/...</code>).</li>
+          <li>Start Bridge backend: <code>cd bridge-backend && npm run dev</code>.</li>
+          <li>
+            Chrome → <code>chrome://extensions</code> → Reload Bridge (<strong>0.2.2</strong>).
+          </li>
+          <li>Open your Payment Link. Wait 1–2 seconds. The Pay in Naira overlay should appear.</li>
+        </ol>
+      </section>
+
+      <section class="block">
+        <h2>Test card (Stripe test mode)</h2>
+        <p class="lead" style="margin-bottom: 0">
+          Card <code>4242 4242 4242 4242</code>, any future expiry, any CVC. You do not need to
+          complete the Stripe pay if Bridge overlay already showed — for the demo click
+          <strong>Pay in Naira</strong> instead.
+        </p>
+      </section>
+
+      <section class="block">
+        <h2>If nothing shows</h2>
+        <ol class="install">
+          <li>Confirm Bridge is enabled in the popup.</li>
+          <li>Confirm backend health: <code>http://localhost:4000/health</code>.</li>
+          <li>Hard refresh the Stripe page. Amount must be visible as text (e.g. $12.99).</li>
+          <li>
+            Embedded Stripe iframes on a merchant site may hide the amount — use a
+            <strong>Payment Link</strong> or <strong>Checkout</strong> hosted URL instead.
+          </li>
+        </ol>
+      </section>
+
+      <p class="foot">
+        <a href="./index.html">Back to Bridge</a>
+        ·
+        <a href="./demo.html">Local demo checkout</a>
+      </p>
+    </div>
+  </body>
+</html>

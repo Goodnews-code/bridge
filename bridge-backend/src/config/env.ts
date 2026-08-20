@@ -59,7 +59,7 @@ const envSchema = z.object({
   // Payment / collection provider
   PAYMENT_PROVIDER: z.enum(["mock"]).default("mock"),
   PAYMENT_PROVIDER_SECRET: z.string().min(1).default("whsec_dev"),
-  COLLECTION_ACCOUNT_NAME: z.string().min(1).default("PARON PAYMENTS (SANDBOX)"),
+  COLLECTION_ACCOUNT_NAME: z.string().min(1).default("BRIDGE PAYMENTS (SANDBOX)"),
 
   // Dev-only transfer simulation
   SIMULATE_TRANSFERS: boolish.default(false),

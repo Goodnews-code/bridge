@@ -45,7 +45,7 @@ export class MockCollectionProvider implements CollectionProvider {
     return {
       accountName: env.COLLECTION_ACCOUNT_NAME,
       accountNumber,
-      bank: "Paron Sandbox Bank",
+      bank: "WEMA Bank (ALAT)",
       reference: input.reference,
       amount: input.amount,
       currency: input.currency,

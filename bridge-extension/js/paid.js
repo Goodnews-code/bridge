@@ -1,4 +1,4 @@
-function nairaDirectFormatNaira(amount) {
+function bridgeFormatNaira(amount) {
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
@@ -6,17 +6,17 @@ function nairaDirectFormatNaira(amount) {
   }).format(amount);
 }
 
-function nairaDirectEnsurePaidStyles() {
-  if (document.getElementById("nairadirect-paid-css")) return;
+function bridgeEnsurePaidStyles() {
+  if (document.getElementById("bridge-paid-css")) return;
   const link = document.createElement("link");
-  link.id = "nairadirect-paid-css";
+  link.id = "bridge-paid-css";
   link.rel = "stylesheet";
   link.href = chrome.runtime.getURL("css/paid.css");
   document.documentElement.appendChild(link);
 }
 
-function nairaDirectShowPaid(payload) {
-  nairaDirectEnsurePaidStyles();
+function bridgeShowPaid(payload) {
+  bridgeEnsurePaidStyles();
 
   const payPanel = document.getElementById("nd-pay-panel");
   const paidPanel = document.getElementById("nd-paid-panel");
@@ -26,10 +26,10 @@ function nairaDirectShowPaid(payload) {
 
   if (payPanel) payPanel.hidden = true;
   if (paidPanel) paidPanel.hidden = false;
-  if (nairaEl && payload.totalNgn) nairaEl.textContent = nairaDirectFormatNaira(payload.totalNgn);
+  if (nairaEl && payload.totalNgn) nairaEl.textContent = bridgeFormatNaira(payload.totalNgn);
   if (sessionEl && payload.sessionId) sessionEl.textContent = payload.sessionId;
   if (receiptEl && payload.sessionId) {
-    receiptEl.textContent = `${payload.sessionId} · ${nairaDirectFormatNaira(payload.totalNgn || 0)}`;
+    receiptEl.textContent = `${payload.sessionId} · ${bridgeFormatNaira(payload.totalNgn || 0)}`;
   }
 
   document.querySelectorAll("button, input[type='submit']").forEach((node) => {
@@ -41,15 +41,15 @@ function nairaDirectShowPaid(payload) {
     }
   });
 
-  if (document.getElementById("nairadirect-paid-banner")) return;
+  if (document.getElementById("bridge-paid-banner")) return;
 
   const banner = document.createElement("div");
-  banner.id = "nairadirect-paid-banner";
+  banner.id = "bridge-paid-banner";
   banner.setAttribute("role", "status");
   banner.innerHTML = `
     <strong>Payment made</strong>
-    <span>Bridge settled this checkout${payload.totalNgn ? ` · ${nairaDirectFormatNaira(payload.totalNgn)}` : ""}.</span>
+    <span>Bridge settled this checkout${payload.totalNgn ? ` · ${bridgeFormatNaira(payload.totalNgn)}` : ""}.</span>
   `;
   document.documentElement.appendChild(banner);
-  document.body.classList.add("nairadirect-paid");
+  document.body.classList.add("bridge-paid");
 }
